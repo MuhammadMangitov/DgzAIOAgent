@@ -5,7 +5,9 @@
 		<Package Description="Test file in a Product" Comments="Simple test" InstallerVersion="200" Compressed="yes" InstallScope="perMachine"/>
 		<Property Id="MSICACHEORIGINALPACKAGE" Value="1" />
 		<Property Id="MsiLogging" Value="voicewarmup" />
-		<Property Id="ARPPRODUCTICON" Value="agentIcon" />
+		
+		<!--Kontrol paneldan yashirish !!! -->
+		<!--<Property Id="ARPSYSTEMCOMPONENT" Value="1" />-->
 		
 		<Binary Id="CustomActionDLL" SourceFile="..\CustomAction_uninstall\bin\Release\CustomAction_uninstall.CA.dll" />
 
