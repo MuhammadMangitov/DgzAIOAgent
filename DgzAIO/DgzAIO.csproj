@@ -149,6 +149,6 @@
   </Target>
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <PropertyGroup>
-    <PostBuildEvent>"C:\Users\Muhammad\Desktop\SystemMonitorInstaller\UpdateMaker\bin\Release\UpdateMaker.exe"</PostBuildEvent>
+    <PostBuildEvent>$(ProjectDir)bin\Release\UpdateMaker.exe</PostBuildEvent>
   </PropertyGroup>
 </Project>
