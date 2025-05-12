@@ -13,7 +13,6 @@ namespace DgzAIO
         {
             try
             {
-                //
                 AgentUpdater agentUpdater = new AgentUpdater();
                 await agentUpdater.CheckAndUpdate();
 
