@@ -49,8 +49,9 @@ namespace SocketClient.Managers
                 bool downloaded = await _fileDownloader.DownloadFileAsync(requestUrl, savePath, jwtToken);
                 if (!downloaded)
                 {
+
                     _logger.LogError("Fayl yuklab olishda xatolik yuz berdi.");
-                    return false;
+                    return false;   
                 }
 
                 if (!File.Exists(savePath))
@@ -73,7 +74,7 @@ namespace SocketClient.Managers
                         _logger.LogInformation($"Installation succeeded with argument: {arg}");
 
                         installationSucceeded = true;
-                        break; // O'rnatish muvaffaqiyatli bo'lsa, qolgan argumentlar bilan sinab ko'rishni to'xtatish
+                        break; 
                     }
                     else
                     {
@@ -83,7 +84,7 @@ namespace SocketClient.Managers
 
                 if (installationSucceeded)
                 {
-                    await Task.Delay(3000); // O'rnatishdan so'ng 3 soniya kutish
+                    await Task.Delay(3000);
 
                     try
                     {
@@ -151,7 +152,7 @@ namespace SocketClient.Managers
                     var outputTask = process.StandardOutput.ReadToEndAsync();
                     var errorTask = process.StandardError.ReadToEndAsync();
 
-                    bool exited = process.WaitForExit(30000); // 30 sekund kutish
+                    bool exited = process.WaitForExit(30000);
 
                     string output = "";
                     string error = "";
@@ -246,9 +247,9 @@ namespace SocketClient.Managers
 
                     if (exitCode == 0)
                     {
-                        await SendApplicationForSocketAsync(); // to‘g‘ri chaqirildi
+                        await SendApplicationForSocketAsync(); 
                         _logger.LogInformation($"Successfully uninstalled {appName} with argument: {argument}");
-                        return true; // birinchi muvaffaqiyatda qayt
+                        return true; 
                     }
                     else
                     {
@@ -347,7 +348,6 @@ namespace SocketClient.Managers
                 return -1;
             }
         }
-
 
         public bool CloseApplication(string appName)
         {
