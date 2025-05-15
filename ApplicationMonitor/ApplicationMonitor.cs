@@ -150,7 +150,7 @@ namespace ApplicationMonitor
                             object sizeObj = obj["EstimatedSize"];
                             if (sizeObj != null)
                             {
-                                return Convert.ToDouble(sizeObj) / 1024; // KB → MB
+                                return Convert.ToDouble(sizeObj) / 1024;
                             }
                         }
                     }
@@ -167,7 +167,6 @@ namespace ApplicationMonitor
         {
             if (string.IsNullOrEmpty(installLocation) || !Directory.Exists(installLocation))
                 return null;
-
             try
             {
                 long size = await Task.Run(() => Directory.EnumerateFiles(installLocation, "*.*", SearchOption.AllDirectories)
@@ -194,7 +193,6 @@ namespace ApplicationMonitor
             return null;
         }
     }
-
     public static class RegistryExtensions
     {
         public static void TryGetValue(this RegistryKey key, string name, out string result)

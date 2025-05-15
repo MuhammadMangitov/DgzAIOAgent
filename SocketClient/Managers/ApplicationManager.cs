@@ -85,7 +85,6 @@ namespace SocketClient.Managers
                 if (installationSucceeded)
                 {
                     await Task.Delay(3000);
-
                     try
                     {
                         if (File.Exists(savePath))
@@ -118,7 +117,6 @@ namespace SocketClient.Managers
                 return false;
             }
         }
-
         private async Task<bool> TryInstallAsync(string filePath, string arguments, bool isMsi)
         {
             try
@@ -130,7 +128,7 @@ namespace SocketClient.Managers
                     if (isMsi)
                     {
                         process.StartInfo.FileName = "msiexec";
-                        process.StartInfo.Arguments = $"/i \"{filePath}\" {arguments}";
+                        process.StartInfo.Arguments = $"/I \"{filePath}\" /QN /NORESTART";
                         _logger.LogInformation($"msiexec command: {process.StartInfo.Arguments}");
                     }
                     else
@@ -224,32 +222,51 @@ namespace SocketClient.Managers
             }
         }
 
-
-        public async Task<bool> UninstallApplicationAsync(string appName, string[] arguments)
+        public async Task<bool> UninstallApplicationAsync(string appName, string[] arguments, string type)
         {
             try
             {
-                string uninstallString = _registryHelper.GetUninstallString(appName);
-                _logger.LogInformation($"Uninstall string: {uninstallString} for {appName}");
+                var (uninstallValue, isMsi) = _registryHelper.GetUninstallString(appName);
+                _logger.LogInformation($"Uninstall string/value: {uninstallValue} for {appName} (IsMSI: {isMsi})");
 
-                if (string.IsNullOrEmpty(uninstallString))
+                if (string.IsNullOrEmpty(uninstallValue))
                 {
-                    _logger.LogError($"Uninstall string for {appName} not found.");
+                    _logger.LogError($"Uninstall value for {appName} not found.");
                     return false;
                 }
 
+                if (type == "Windows Installer" && isMsi)
+                {
+                    // MSI uninstall
+                    _logger.LogInformation($"Type: {type}, isMsi {isMsi}");
+                    string msiCommand = $"msiexec /x \"{uninstallValue}\" /qn";
+                    _logger.LogInformation($"Uninstalling MSI application {appName} with: {msiCommand}");
+
+                    int exitCode = await ExecuteProcessAsync("cmd.exe", $"/C {msiCommand}");
+                    if (exitCode == 0)
+                    {
+                        await SendApplicationForSocketAsync();
+                        _logger.LogInformation($"Successfully uninstalled MSI application {appName}");
+                        return true;
+                    }
+
+                    _logger.LogError($"Failed to uninstall MSI application {appName}, exit code: {exitCode}");
+                    return false;
+                }
+
+                // EXE uninstall
                 foreach (var argument in arguments)
                 {
-                    string fullUninstallCommand = $"\"{uninstallString}\" {argument}";
+                    string fullUninstallCommand = $"\"{uninstallValue}\" {argument}";
                     _logger.LogInformation($"Uninstalling {appName} with argument: {argument}");
 
                     int exitCode = await ExecuteProcessAsync("cmd.exe", $"/C {fullUninstallCommand}");
 
                     if (exitCode == 0)
                     {
-                        await SendApplicationForSocketAsync(); 
+                        await SendApplicationForSocketAsync();
                         _logger.LogInformation($"Successfully uninstalled {appName} with argument: {argument}");
-                        return true; 
+                        return true;
                     }
                     else
                     {
@@ -291,7 +308,7 @@ namespace SocketClient.Managers
                     var outputTask = process.StandardOutput.ReadToEndAsync();
                     var errorTask = process.StandardError.ReadToEndAsync();
 
-                    bool exited = process.WaitForExit(20000); // synchronous, since .NET 4.7.2
+                    bool exited = process.WaitForExit(20000);
                     if (!exited)
                     {
                         try
@@ -348,6 +365,134 @@ namespace SocketClient.Managers
                 return -1;
             }
         }
+
+        /*public async Task<bool> UninstallApplicationAsync(string appName, string[] arguments, string type)
+        {
+            try
+            {
+                string uninstallString = _registryHelper.GetUninstallString(appName);
+                _logger.LogInformation($"Uninstall string: {uninstallString} for {appName}");
+
+                if (string.IsNullOrEmpty(uninstallString))
+                {
+                    _logger.LogError($"Uninstall string for {appName} not found.");
+                    return false;
+                }
+                if (type == "Windows Installer")
+                {
+
+                }
+
+                foreach (var argument in arguments)
+                {
+                    string fullUninstallCommand = $"\"{uninstallString}\" {argument}";
+                    _logger.LogInformation($"Uninstalling {appName} with argument: {argument}");
+
+                    int exitCode = await ExecuteProcessAsync("cmd.exe", $"/C {fullUninstallCommand}");
+
+                    if (exitCode == 0)
+                    {
+                        await SendApplicationForSocketAsync(); 
+                        _logger.LogInformation($"Successfully uninstalled {appName} with argument: {argument}");
+                        return true; 
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to uninstall {appName} with argument: {argument}, exit code: {exitCode}");
+                    }
+                }
+
+                _logger.LogError($"All uninstall attempts for {appName} failed.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error during uninstallation of {appName}: {ex}");
+                return false;
+            }
+        }
+        private async Task<int> ExecuteProcessAsync(string fileName, string arguments)
+        {
+            try
+            {
+                _logger.LogInformation($"Executing process: {fileName} {arguments}");
+
+                string output = "";
+                string error = "";
+
+
+                using (var process = new Process())
+                {
+                    process.StartInfo.FileName = fileName;
+                    process.StartInfo.Arguments = arguments;
+                    process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                    process.StartInfo.UseShellExecute = false;
+                    process.StartInfo.CreateNoWindow = true;
+                    process.StartInfo.RedirectStandardOutput = true;
+                    process.StartInfo.RedirectStandardError = true;
+
+                    process.Start();
+
+                    var outputTask = process.StandardOutput.ReadToEndAsync();
+                    var errorTask = process.StandardError.ReadToEndAsync();
+
+                    bool exited = process.WaitForExit(20000);
+                    if (!exited)
+                    {
+                        try
+                        {
+                            _logger.LogInformation("Process did not exit in time. Attempting to taskkill...");
+
+                            var killer = new ProcessStartInfo
+                            {
+                                FileName = "taskkill",
+                                Arguments = $"/PID {process.Id} /F /T",
+                                CreateNoWindow = true,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true
+                            };
+
+                            using (var killProc = Process.Start(killer))
+                            {
+                                string killOut = killProc.StandardOutput.ReadToEnd();
+                                string killErr = killProc.StandardError.ReadToEnd();
+
+                                _logger.LogInformation($"taskkill output: {killOut}");
+                                if (!string.IsNullOrWhiteSpace(killErr))
+                                    _logger.LogError($"taskkill error: {killErr}");
+
+                                killProc.WaitForExit();
+                            }
+
+                            return -1;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError($"taskkill failed: {ex.Message}");
+                            return -1;
+                        }
+                    }
+
+                    output = await outputTask;
+                    error = await errorTask;
+
+                    if (!string.IsNullOrWhiteSpace(output))
+                        _logger.LogInformation($"Process Output: {output}");
+
+                    if (!string.IsNullOrWhiteSpace(error))
+                        _logger.LogError($"Process Error: {error}");
+
+                    _logger.LogInformation($"Process Exit Code: {process.ExitCode}");
+                    return process.ExitCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Exception executing process: {ex.Message}");
+                return -1;
+            }
+        }*/
 
         public bool CloseApplication(string appName)
         {

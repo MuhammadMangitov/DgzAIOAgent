@@ -58,7 +58,7 @@ namespace SocketClient.Services
         {
             _client.On("connect", async response =>
             {
-                _logger.LogInformation("Socket.io connected successfully!");
+                _logger.LogInformation("Socket.io connected successfully! 1");
                 if (!_isRegistered)
                 {
                     await _client.EmitAsync("register", "SystemMonitor_Client");
@@ -67,14 +67,10 @@ namespace SocketClient.Services
                 }
             });
 
-            _client.On("connect_error", response =>
-            {
-                _logger.LogError($"Socket connect_error: {response}");
-            });
-
             _client.On("disconnect", response =>
             {
-                _logger.LogError($"Socket disconnected: {response}");
+                string disconnectReason = response.GetValue<string>();
+                _logger.LogInformation($"Socket disconnected at {DateTime.Now:yyyy-MM-dd HH:mm:ss}. URL: {_config.GetSocketUrl()}, Reason: {disconnectReason}. Reconnection will be attempted.");
                 _isRegistered = false;
             });
 
@@ -82,7 +78,7 @@ namespace SocketClient.Services
             {
                 _logger.LogInformation($"Received command event: {response}");
                 var commandData = response.GetValue<CommandData>();
-                _logger.LogInformation($"Command: {commandData.command}, App Name: {commandData.name}, Arguments: {commandData.arguments}");
+                _logger.LogInformation($"Command: {commandData.command}, Type : {commandData.type}, App Name: {commandData.name}, Arguments: {commandData.arguments}");
                 await HandleAppCommand(commandData);
             });
 
@@ -140,7 +136,7 @@ namespace SocketClient.Services
 
                 string command = data.command.ToLower();
                 string appName = data.name ?? "";
-
+                string type = data.type ?? "";
                 var arguments = (data.arguments ?? new List<string>()).ToArray();
 
                 bool success = false;
@@ -149,7 +145,7 @@ namespace SocketClient.Services
                 {
                     case "delete_app":
                         _logger.LogInformation($"Uninstalling application: {appName}");
-                        success = await _appManager.UninstallApplicationAsync(appName, arguments);
+                        success = await _appManager.UninstallApplicationAsync(appName, arguments, type);
                         break;
                     case "install_app":
                     case "update_app":

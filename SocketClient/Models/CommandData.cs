@@ -10,6 +10,7 @@ namespace SocketClient.Models
     {
         public string command { get; set; }
         public string name { get; set; }
+        public string type { get; set; }
         public List<string> arguments { get; set; }
     }
 }

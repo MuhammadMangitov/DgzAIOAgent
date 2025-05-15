@@ -45,6 +45,7 @@ namespace DgzAIO
                 {
                     SQLiteHelper.WriteLog("Modules", "StartSocketClientThread", "Socket.io connected successfully");
                     Console.WriteLine("[Socket Client] Socket.io connected successfully!");
+                    
                 }
                 else
                 {
