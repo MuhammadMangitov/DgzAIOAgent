@@ -101,7 +101,7 @@ namespace ApplicationMonitor
                                 {
                                     Name = name,
                                     Size = size.HasValue ? Math.Round(size.Value, 2) : 0.0,
-                                    Type = isWindowsInstaller ? "Windows Installer" : "User",
+                                    Type = isWindowsInstaller ? "System" : "User",
                                     InstalledDate = ParseInstallDate(subKey?.GetValue("InstallDate")?.ToString()),
                                     Version = version
                                 });

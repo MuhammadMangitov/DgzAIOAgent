@@ -4,8 +4,8 @@ using DBHelper;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,20 +13,24 @@ namespace ApiClient
 {
     public class ApiClient
     {
-        private static readonly HttpClient client = new HttpClient
+        private static readonly HttpClient client;
+
+        static ApiClient()
         {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
+            client = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30) // Timeoutni 10 dan 30 ga oshirdik
+            };
+        }
 
         private static readonly string BaseUrl = ConfigurationManagerApiClient.ApiConfig.BaseUrl;
         private static readonly string BaseUrlForApps = ConfigurationManagerApiClient.ApiConfig.BaseUrlForApps;
+
         public static async Task<(string token, int statusCode)> GetJwtTokenFromApi()
         {
             try
             {
                 var computerInfo = await ComputerInfo.GetComputerInfoAsync();
-                //Console.WriteLine($"Computers info: {JsonConvert.SerializeObject(computerInfo)}");
-
                 var jsonContent = JsonConvert.SerializeObject(computerInfo);
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
@@ -42,7 +46,6 @@ namespace ApiClient
                     var jsonResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
 
                     string token = jsonResponse?.token;
-                    //Console.WriteLine($"JWT token apidan kelgan: {token}");
                     return (token, statusCode);
                 }
                 else
@@ -51,10 +54,17 @@ namespace ApiClient
                     return (null, statusCode);
                 }
             }
+            catch (TaskCanceledException ex)
+            {
+                string reason = ex.InnerException is TimeoutException ? "Timeout" : "Bekor qilingan";
+                Console.WriteLine($"[HTTP error]: So‘rov bekor qilindi. Sabab: {reason}, Xabar: {ex.Message}");
+                SQLiteHelper.WriteError($"HTTP error: So‘rov bekor qilindi. Sabab: {reason}, Xabar: {ex.Message}");
+                return (null, 408); // 408 - Request Timeout
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error sending request to API: {ex.Message}");
-                //SQLiteHelper.WriteError($"Error sending request to API: {ex.Message}");
+                SQLiteHelper.WriteError($"Error sending request to API: {ex.Message}");
                 return (null, 500);
             }
         }
@@ -63,19 +73,21 @@ namespace ApiClient
         {
             try
             {
-                //SQLiteHelper.WriteLog("ApiClient", "SendData", $"Sending data to {url}");
                 var json = JsonConvert.SerializeObject(data);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-
                 var token = await SQLiteHelper.GetJwtToken();
+
+                // Avvalgi tokenni tozalash
+                client.DefaultRequestHeaders.Authorization = null;
+
                 if (!string.IsNullOrEmpty(token))
                 {
-                    client.DefaultRequestHeaders.Authorization = new
-                        System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    client.DefaultRequestHeaders.Authorization =
+                        new AuthenticationHeaderValue("Bearer", token);
                 }
 
-                HttpResponseMessage response = await client.PostAsync(url, content);
+                var response = await client.PostAsync(url, content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -90,10 +102,11 @@ namespace ApiClient
                 Console.WriteLine($"[HTTP error]: {httpEx.Message}");
                 SQLiteHelper.WriteError($"HTTP error: {httpEx.Message}");
             }
-            catch (TaskCanceledException)
+            catch (TaskCanceledException ex)
             {
-                Console.WriteLine("[HTTP error]: So‘rov vaqt chegarasidan oshib ketdi.");
-                SQLiteHelper.WriteError("HTTP error: So‘rov vaqt chegarasidan oshib ketdi.");
+                string reason = ex.InnerException is TimeoutException ? "Timeout" : "Bekor qilingan";
+                Console.WriteLine($"[HTTP error]: So‘rov bekor qilindi. Sabab: {reason}, Xabar: {ex.Message}");
+                SQLiteHelper.WriteError($"HTTP error: So‘rov bekor qilindi. Sabab: {reason}, Xabar: {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -106,8 +119,7 @@ namespace ApiClient
 
         public static async Task<bool> SendProgramInfo(List<ProgramDetails> programs)
         {
-            //Console.WriteLine($"Computers info: {JsonConvert.SerializeObject(programs)}");
-            SQLiteHelper.WriteLog($"s", "s", $"Sending data to {BaseUrlForApps}: {programs.Count}");
+            SQLiteHelper.WriteLog("ApiClient", "SendProgramInfo", $"Number of applications submitted: {programs.Count}");
             return await SendData(BaseUrlForApps, programs);
         }
 
@@ -116,6 +128,5 @@ namespace ApiClient
             var response = new { command, result, error };
             return await SendData($"{BaseUrl}/command-result", response);
         }
-
     }
 }

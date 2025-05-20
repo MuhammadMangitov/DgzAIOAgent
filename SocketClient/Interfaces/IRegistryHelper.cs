@@ -8,6 +8,6 @@ namespace SocketClient.Interfaces
 {
     public interface IRegistryHelper
     {
-        (string uninstallValue, bool isMsi) GetUninstallString(string appName);
+        string GetUninstallString(string appName);
     }
 }

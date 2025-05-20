@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SocketClient.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,9 +8,9 @@ using System.Threading.Tasks;
 namespace SocketClient.Interfaces
 {
     public interface IApplicationManager
-    {
-        Task<bool> InstallApplicationAsync(string appName, string command, string[] arguments);
-        Task<bool> UninstallApplicationAsync(string appName, string[] arguments, string type);
+    {   
+        Task<AppResult> InstallApplicationAsync(string appName, string[] arguments, string comand_name);
+        Task<AppResult> UninstallApplicationAsync(string appName, string[] arguments, string type);
         bool CloseApplication(string appName);
         Task SendApplicationForSocketAsync();
     }

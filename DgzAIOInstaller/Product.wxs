@@ -22,19 +22,19 @@
 			<Directory Id="ProgramFilesFolder">
 				<Directory Id="INSTALLFOLDER" Name="DgzAIO">
 
-					<Component Id="CleanupComponent" Guid="{88432D84-0665-47BE-96D5-627D69889D32}">
+				<Component Id="CleanupComponent" Guid="{88432D84-0665-47BE-96D5-627D69889D32}">
 						<CreateFolder Directory="INSTALLFOLDER" />
 						<RemoveFile Id="RemoveAllFiles" Name="*.*" On="uninstall" Directory="INSTALLFOLDER" />
 						<RemoveFolder Id="RemoveInstallFolder" On="uninstall" Directory="INSTALLFOLDER" />
-					</Component>
+				</Component>
 
-					<Component Id="RegistryComponent" Guid="{74178BB3-C00B-4D62-BAA7-1D27F4C5DCC7}">
+				<Component Id="RegistryComponent" Guid="{74178BB3-C00B-4D62-BAA7-1D27F4C5DCC7}">
 						<RegistryKey Root="HKLM" Key="SOFTWARE\Datagaze\DLP" Action="createAndRemoveOnUninstall">
 							<RegistryValue Name="guid" Type="string" Value="[ProductCode]" KeyPath="yes" />
 						</RegistryKey>
-					</Component>
+				</Component>
 
-					<Component Id="RegistryUninstall" Guid="{A1B2C3D4-E5F6-7890-ABCD-1234567890EF}">
+				<Component Id="RegistryUninstall" Guid="{A1B2C3D4-E5F6-7890-ABCD-1234567890EF}">
 						<RegistryKey Root="HKLM" Key="SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\[ProductCode]"
 									 Action="createAndRemoveOnUninstall">
 							<RegistryValue Name="DisplayName" Type="string" Value="DgzAIO" />
@@ -47,9 +47,9 @@
 							<RegistryValue Name="NoRepair" Type="integer" Value="1" />
 							<RegistryValue Name="EstimatedSize" Type="integer" Value="10240" />
 						</RegistryKey>
-					</Component>
+				</Component>
 
-					<Component Id="DgzAIOServiceComponent" Guid="A3BB6943-C53E-4CC7-BB5C-EF98F915AE50">
+				<Component Id="DgzAIOServiceComponent" Guid="A3BB6943-C53E-4CC7-BB5C-EF98F915AE50">
 						<File Id="DgzAIOServiceExe" Name="DgzAIOWindowsService.exe" Source="$(var.OutputDir)\bin\Release\DgzAIOWindowsService.exe" />
 						<ServiceInstall Id="DgzAIOServiceInstaller"
 										Name="DgzAIOService"
@@ -64,8 +64,8 @@
 										Stop="both"
 										Remove="uninstall"
 										Wait="yes" />
-					</Component>
-					<Component Id="APICLIENT.DLL" DiskId="1" Guid="6D679523-62D8-4809-B6F3-73FDAB9BCEC4">
+				</Component>
+				<Component Id="APICLIENT.DLL" DiskId="1" Guid="6D679523-62D8-4809-B6F3-73FDAB9BCEC4">
 					<File Id="APICLIENT.DLL" Name="ApiClient.dll" Source="$(var.OutputDir)\bin\Release\ApiClient.dll" />
 				</Component>
 				<Component Id="APPLICATIONMONITOR.DLL" DiskId="1" Guid="F695E9FF-7676-482D-84B9-36D551894778">
@@ -163,6 +163,7 @@
 				<Directory Id="ILLink" Name="ILLink" />
 			</Directory>
 		</Directory>
+	
 		<Feature Id="DefaultFeature" Title="Main Feature" Level="1">
 			<ComponentRef Id="CleanupComponent" />
 			<ComponentRef Id="DgzAIOServiceComponent" />
