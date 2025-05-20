@@ -361,7 +361,6 @@ namespace SocketClient.Managers
             }
         }
 
-
         public bool CloseApplication(string appName)
         {
             try
