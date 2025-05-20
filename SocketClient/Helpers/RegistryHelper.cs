@@ -22,7 +22,7 @@ namespace SocketClient.Helpers
             {
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
                 @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-                @"Software\Microsoft\Windows\CurrentVersion\Uninstall" // HKCU uchun
+                @"Software\Microsoft\Windows\CurrentVersion\Uninstall" 
             };
 
             try
@@ -50,6 +50,12 @@ namespace SocketClient.Helpers
                                     string uninstallString = subKey.GetValue("UninstallString")?.ToString();
                                     if (!string.IsNullOrWhiteSpace(uninstallString))
                                     {
+                                        if (uninstallString.StartsWith("MsiExec.exe", StringComparison.OrdinalIgnoreCase) &&
+                                            uninstallString.Contains("/I"))
+                                        {
+                                            uninstallString = uninstallString.Replace("/I", "/x").Trim();
+                                        }
+
                                         return uninstallString;
                                     }
 
@@ -59,7 +65,7 @@ namespace SocketClient.Helpers
                                     if (isMsi != null && isMsi.ToString() == "1" &&
                                         productCode != null && Guid.TryParse(productCode.ToString(), out _))
                                     {
-                                        return productCode.ToString(); // bu keyinchalik msiexec /x {code} formatda ishlatiladi
+                                        return $"MsiExec.exe /x {productCode} /qn /norestart";
                                     }
                                 }
                             }
@@ -77,6 +83,46 @@ namespace SocketClient.Helpers
             }
 
             return null;
+        }
+
+        public string GetGuid(string appName)
+        {
+            // MSI asosida o‘rnatilgan ilovalar GUID bilan saqlanadi
+            string[] registryPaths = new[]
+            {
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            foreach (var path in registryPaths)
+            {
+                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(path))
+                {
+                    if (key == null) continue;
+
+                    foreach (string subkeyName in key.GetSubKeyNames())
+                    {
+                        // MSI uninstall GUID formatida: {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+                        if (!subkeyName.StartsWith("{") || !subkeyName.EndsWith("}"))
+                            continue;
+
+                        using (RegistryKey subkey = key.OpenSubKey(subkeyName))
+                        {
+                            if (subkey == null) continue;
+
+                            string displayName = subkey.GetValue("DisplayName") as string;
+
+                            if (!string.IsNullOrEmpty(displayName) &&
+                                displayName.Equals(appName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return subkeyName; 
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null; 
         }
 
     }

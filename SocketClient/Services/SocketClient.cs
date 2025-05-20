@@ -85,7 +85,7 @@ namespace SocketClient.Services
             {
                 _logger.LogInformation($"Received update_app event: {response}");
                 var commandData = response.GetValue<UpdateAppData>();
-                _logger.LogInformation($"App Name: {commandData.name}, Arguments: {commandData.arguments}");
+                _logger.LogInformation($"App Name: {commandData.name}, Arguments: {commandData.arguments}, App real name: {commandData.realName}");
                 await UpdateAppCommand(commandData, "update_app");
             });
 
@@ -137,6 +137,7 @@ namespace SocketClient.Services
             string appName = commandData.name ?? "";
             var arguments = (commandData.arguments ?? new List<string>()).ToArray();
             var userId = commandData.userId ?? "";
+            var realName = commandData.realName ?? "";
             try
             {
                 if (commandData == null || string.IsNullOrEmpty(commandData.name))
@@ -146,7 +147,7 @@ namespace SocketClient.Services
                     return;
                 }
                 _logger.LogInformation($"Updating application: {appName}");
-                var result = await _appManager.InstallApplicationAsync(appName, arguments, comand_name);
+                var result = await _appManager.InstallApplicationAsync(appName, arguments, comand_name, realName);
                 await EmitResponseUpdateAsync("update_app", result.IsSuccess, appName, result.Message, userId);
             }
             catch (Exception ex)
@@ -182,7 +183,7 @@ namespace SocketClient.Services
                         result = await _appManager.UninstallApplicationAsync(appName, arguments, type);
                         break;
                     case "install_app":
-                        result = await _appManager.InstallApplicationAsync(appName, arguments);
+                        result = await _appManager.InstallApplicationAsync(appName, arguments, "install_app", "");
                         _logger.LogInformation($"InstallApplicationAsync completed. Success: {success}");
                         break;
                     default:

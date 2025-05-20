@@ -9,5 +9,6 @@ namespace SocketClient.Interfaces
     public interface IRegistryHelper
     {
         string GetUninstallString(string appName);
+        string GetGuid(string appName);
     }
 }

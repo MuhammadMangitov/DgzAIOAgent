@@ -8,6 +8,7 @@ namespace SocketClient.Models
 {
     public class UpdateAppData
     {
+        public string realName { get; set; }               
         public string name { get; set; }
         public string userId { get; set; }
         public List<string> arguments { get; set; }
