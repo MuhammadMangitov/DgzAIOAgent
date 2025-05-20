@@ -81,6 +81,13 @@ namespace SocketClient.Services
                 _logger.LogInformation($"Command: {commandData.command}, Type : {commandData.type}, App Name: {commandData.name}, Arguments: {commandData.arguments}");
                 await HandleAppCommand(commandData);
             });
+            _client.On("update_app", async response =>
+            {
+                _logger.LogInformation($"Received update_app event: {response}");
+                var commandData = response.GetValue<UpdateAppData>();
+                _logger.LogInformation($"App Name: {commandData.name}, Arguments: {commandData.arguments}");
+                await UpdateAppCommand(commandData, "update_app");
+            });
 
             _client.On("delete_agent", async response =>
             {
@@ -106,6 +113,7 @@ namespace SocketClient.Services
                 _logger.LogInformation($"SocketURL: {_config.GetSocketUrl()}");
 
                 await _client.ConnectAsync();
+                Console.WriteLine($"Socket connected: {_client.Id}, {_client.Namespace}");
 
                 if (!_client.Connected)
                 {
@@ -123,60 +131,89 @@ namespace SocketClient.Services
             }
         }
 
+        private async Task UpdateAppCommand(UpdateAppData commandData, string comand_name)
+        {
+
+            string appName = commandData.name ?? "";
+            var arguments = (commandData.arguments ?? new List<string>()).ToArray();
+            var userId = commandData.userId ?? "";
+            try
+            {
+                if (commandData == null || string.IsNullOrEmpty(commandData.name))
+                {
+                    _logger.LogError("Empty or invalid command!");
+                    await EmitResponseAsync("unknown", false, "Empty or invalid command", "Empty or invalid command!", "");
+                    return;
+                }
+                _logger.LogInformation($"Updating application: {appName}");
+                var result = await _appManager.InstallApplicationAsync(appName, arguments, comand_name);
+                await EmitResponseUpdateAsync("update_app", result.IsSuccess, appName, result.Message, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error: {ex.Message}");
+                await EmitResponseUpdateAsync("update_app", false, commandData?.name ?? "", $"Error: {ex.Message}", userId);
+            }
+        }
         private async Task HandleAppCommand(CommandData data)
         {
+            string command = data.command.ToLower();
+            string appName = data.name ?? "";
+            string type = data.type ?? "";
+            var arguments = (data.arguments ?? new List<string>()).ToArray();
+            var taskId = data.taskId ?? "";
+
             try
             {
                 if (data == null || string.IsNullOrEmpty(data.command))
                 {
                     _logger.LogError("Empty or invalid command!");
-                    await EmitResponseAsync("unknown", false, "Empty or invalid command");
+                    await EmitResponseAsync("unknown", false, "Empty or invalid command", "Empty or invalid command!", "");
                     return;
                 }
 
-                string command = data.command.ToLower();
-                string appName = data.name ?? "";
-                string type = data.type ?? "";
-                var arguments = (data.arguments ?? new List<string>()).ToArray();
-
                 bool success = false;
+                AppResult result = AppResult.Fail("Unknown error"); 
 
                 switch (command)
                 {
                     case "delete_app":
                         _logger.LogInformation($"Uninstalling application: {appName}");
-                        success = await _appManager.UninstallApplicationAsync(appName, arguments, type);
+                        result = await _appManager.UninstallApplicationAsync(appName, arguments, type);
                         break;
                     case "install_app":
-                    case "update_app":
-                        success = await _appManager.InstallApplicationAsync(appName, command, arguments);
+                        result = await _appManager.InstallApplicationAsync(appName, arguments);
                         _logger.LogInformation($"InstallApplicationAsync completed. Success: {success}");
                         break;
                     default:
                         _logger.LogError($"Unknown command: {command}");
-                        await EmitResponseAsync(command, false, appName);
+                        await EmitResponseAsync(command, false, appName, "Unknown command: {command}", "");
                         return;
                 }
 
                 _logger.LogInformation($"About to emit response for command: {command}, Success: {success}, App Name: {appName}");
-                await EmitResponseAsync(command, success, appName);
+                await EmitResponseAsync(command, result.IsSuccess, appName, result.Message, taskId);
                 _logger.LogInformation("EmitResponseAsync completed.");
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error: {ex.Message}");
-                await EmitResponseAsync(data?.command ?? "unknown", false, data?.name ?? "");
+                await EmitResponseAsync(data?.command ?? "unknown", false, data?.name ?? "", $"Error: {ex.Message}", taskId);
             }
         }
 
-        private async Task EmitResponseAsync(string command, bool success, string appName)
+        private async Task EmitResponseAsync(string command, bool success, string appName, string message, string taskId)
         {
-            _logger.LogInformation($"Emitting response for command: {command}, Success: {success}, App Name: {appName}");
+            _logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
+                $"App Name: {appName}, Message: {message}, TaskId: {taskId}");
+
             var result = new
             {
                 status = success ? "success" : "error",
                 command,
-                name = appName
+                name = appName,
+                message,
+                taskId = taskId
             };
 
             try
@@ -188,6 +225,36 @@ namespace SocketClient.Services
                     return;
                 }
                 await _client.EmitAsync("response", result);
+                _logger.LogInformation($"Command: {command}, Status: {result.status}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to send response to server: {ex.Message}");
+            }
+        }
+        private async Task EmitResponseUpdateAsync(string command, bool success, string appName, string message, string userId)
+        {
+            _logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
+                $"App Name: {appName}, Message: {message}, ComputerId: {userId}");
+
+            var result = new
+            {
+                command,
+                status = success ? "success" : "error",
+                name = appName,
+                message,
+                userId = userId
+            };
+
+            try
+            {
+                _logger.LogInformation($"Sending response to server: {JsonConvert.SerializeObject(result)}");
+                if (!_client.Connected)
+                {
+                    _logger.LogError("Socket is not connected! Cannot emit response.");
+                    return;
+                }
+                await _client.EmitAsync("update_app_response", result);
                 _logger.LogInformation($"Command: {command}, Status: {result.status}");
             }
             catch (Exception ex)

@@ -6,12 +6,10 @@ using System.Threading.Tasks;
 
 namespace SocketClient.Models
 {
-    public class CommandData
+    public class UpdateAppData
     {
-        public string command { get; set; }
         public string name { get; set; }
-        public string type { get; set; }
-        public string taskId { get; set; }
+        public string userId { get; set; }
         public List<string> arguments { get; set; }
     }
 }
