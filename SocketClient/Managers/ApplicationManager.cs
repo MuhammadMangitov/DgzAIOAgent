@@ -397,6 +397,7 @@ namespace SocketClient.Managers
         }
 
 
+
         /*public async Task<AppResult> InstallApplicationAsync(string appName, string[] arguments)
        {
            try
