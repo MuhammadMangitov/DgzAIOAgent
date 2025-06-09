@@ -102,7 +102,7 @@ namespace ApplicationMonitor
                                     Name = name,
                                     Size = size.HasValue ? Math.Round(size.Value, 2) : 0.0,
                                     Type = isWindowsInstaller ? "System" : "User",
-                                    InstalledDate = ParseInstallDate(subKey?.GetValue("InstallDate")?.ToString()),
+                                    InstalledDate = ParseInstallDate(subKey?.GetValue("InstallDate")?.ToString(), name),
                                     Version = version
                                 });
                             }
@@ -184,14 +184,51 @@ namespace ApplicationMonitor
             }
         }
 
-        private static DateTime? ParseInstallDate(string installDate)
+        private static DateTime? ParseInstallDate(string installDate, string programName)
         {
-            if (DateTime.TryParseExact(installDate, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime date))
+            if (!string.IsNullOrEmpty(installDate) &&
+                DateTime.TryParseExact(installDate, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime date))
             {
                 return date;
             }
+
+            return GetInstallDateViaCIM(programName);
+        }
+
+
+        private static DateTime? GetInstallDateViaCIM(string programName)
+        {
+            try
+            {
+                var options = new ConnectionOptions { EnablePrivileges = true };
+                var scope = new ManagementScope(@"\\.\root\cimv2", options);
+                var query = new ObjectQuery("SELECT Name, InstallDate FROM Win32_InstalledWin32Program");
+
+                using (var searcher = new ManagementObjectSearcher(scope, query))
+                {
+                    foreach (var obj in searcher.Get())
+                    {
+                        string name = obj["Name"]?.ToString();
+                        if (!string.IsNullOrEmpty(name) && name.Equals(programName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string dateStr = obj["InstallDate"]?.ToString();
+                            if (!string.IsNullOrEmpty(dateStr) &&
+                                DateTime.TryParseExact(dateStr, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime date))
+                            {
+                                return date;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                //Console.WriteLine($"[WARN] CIM orqali InstallDate topilmadi: {ex.Message}");
+            }
+
             return null;
         }
+
     }
     public static class RegistryExtensions
     {

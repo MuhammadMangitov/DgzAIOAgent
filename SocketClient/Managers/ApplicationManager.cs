@@ -28,13 +28,15 @@ namespace SocketClient.Managers
         }
         public async Task<AppResult> InstallApplicationAsync(string appName, string[] arguments, string comand_name, string realName)
         {
+            string savePath = null;
+
             try
             {
                 string jwtToken = await SQLiteHelper.GetJwtToken();
                 if (string.IsNullOrEmpty(jwtToken))
                 {
-                    _logger.LogError("JWT token topilmadi!");
-                    return AppResult.Fail("JWT token topilmadi!");
+                    _logger.LogError("JWT token not found!");
+                    return AppResult.Fail("JWT token not found!");
                 }
 
                 string requestUrl = $"{_config.GetApiUrl()}{appName}";
@@ -44,14 +46,14 @@ namespace SocketClient.Managers
                 string installerFolder = Path.Combine(programFiles, "DgzAIO", "Installers");
                 Directory.CreateDirectory(installerFolder);
 
-                string savePath = Path.Combine(installerFolder, appName);
+                savePath = Path.Combine(installerFolder, appName);
                 _logger.LogInformation($"Installer file path: {savePath}");
 
                 bool downloaded = await _fileDownloader.DownloadFileAsync(requestUrl, savePath, jwtToken);
                 if (!downloaded || !File.Exists(savePath))
                 {
-                    _logger.LogError("Fayl yuklab olinmadi yoki topilmadi.");
-                    return AppResult.Fail("Fayl yuklab olinmadi yoki topilmadi.");
+                    _logger.LogError("The file was not downloaded or found.");
+                    return AppResult.Fail("The file was not downloaded or found.");
                 }
 
                 bool isMsi = Path.GetExtension(savePath).Equals(".msi", StringComparison.OrdinalIgnoreCase);
@@ -59,20 +61,18 @@ namespace SocketClient.Managers
 
                 if (isMsi)
                 {
-                    _logger.LogInformation("MSI fayl aniqlandi — yagona o‘rnatish jarayoni boshlanadi.");
+                    _logger.LogInformation("MSI file detected — single installation process begins.");
 
-                    // MSI o‘rnatsa: uninstall (agar update bo‘lsa) + install
                     bool result = await TryInstallAsync(savePath, "", isMsi, comand_name, realName);
                     if (result)
                     {
                         await SendApplicationForSocketAsync();
-                        _logger.LogInformation("MSI o‘rnatish muvaffaqiyatli.");
+                        _logger.LogInformation("MSI installation successful.");
                         installationSucceeded = true;
                     }
                 }
                 else
                 {
-                    // EXE fayl: har bir argumentni sinab ko‘ramiz
                     foreach (var arg in arguments)
                     {
                         _logger.LogInformation($"Trying install with argument: {arg}");
@@ -94,35 +94,36 @@ namespace SocketClient.Managers
 
                 if (installationSucceeded)
                 {
-                    await Task.Delay(3000); // optional delay
-                    try
-                    {
-                        if (File.Exists(savePath))
-                        {
-                            File.Delete(savePath);
-                            _logger.LogInformation($"Installer fayli o‘chirildi: {savePath}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError($"Delete error: {ex}");
-                    }
-
-                    return AppResult.Success("Ilova muvaffaqiyatli o‘rnatildi.");
+                    await Task.Delay(1000); 
+                    return AppResult.Success("The application was successfully installed.");
                 }
                 else
                 {
-                    _logger.LogError("O‘rnatish muvaffaqiyatsiz.");
-                    return AppResult.Fail("O‘rnatish bajarilmadi.");
+                    _logger.LogError("Installation failed..");
+                    return AppResult.Fail("Installation failed..");
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Installation error: {ex}");
-                return AppResult.Fail($"O‘rnatishda xatolik: {ex.Message}");
+                return AppResult.Fail($"Installation error: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(savePath) && File.Exists(savePath))
+                    {
+                        File.Delete(savePath);
+                        _logger.LogInformation($"Installer file deleted (finally): {savePath}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error deleting file in finally block: {ex.Message}");
+                }
             }
         }
-
         private async Task<bool> TryInstallAsync(string filePath, string arguments, bool isMsi, string commandName, string realName)
         {
             try
@@ -139,11 +140,11 @@ namespace SocketClient.Managers
                         bool uninstallSuccess = await UninstallMsiByGuidAsync(productGuid);
                         if (!uninstallSuccess)
                         {
-                            _logger.LogError("Old MSI ilovani o‘chirish muvaffaqiyatsiz.");
+                            _logger.LogError("Uninstalling the old MSI application failed.");
                             return false;
                         }
 
-                        _logger.LogInformation("Old MSI ilova muvaffaqiyatli o‘chirildi.");
+                        _logger.LogInformation("The old MSI application was successfully uninstalled.");
                         await Task.Delay(2000);
                     }
                     else
@@ -164,62 +165,52 @@ namespace SocketClient.Managers
                     process.StartInfo.WorkingDirectory = Path.GetDirectoryName(filePath);
                     process.StartInfo.UseShellExecute = false;
                     process.StartInfo.CreateNoWindow = true;
-                    process.StartInfo.RedirectStandardOutput = true;
-                    process.StartInfo.RedirectStandardError = true;
+                    process.StartInfo.RedirectStandardOutput = false;
+                    process.StartInfo.RedirectStandardError = false;
                     process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
 
                     process.Start();
+                    _logger.LogInformation($"Process started: {process.Id}");
 
-                    var outputTask = process.StandardOutput.ReadToEndAsync();
-                    var errorTask = process.StandardError.ReadToEndAsync();
 
-                    bool exited = process.WaitForExit(30000);
-
-                    string output = await outputTask;
-                    string error = await errorTask;
-
-                    if (!exited)
+                    var exitTask = Task.Run(() =>
                     {
-                        _logger.LogInformation("Process time out — taskkill boshlanmoqda.");
+                        process.WaitForExit();
+                        return true;
+                    });
 
+                    var timeoutTask = Task.Delay(30000);
+
+                    if (await Task.WhenAny(exitTask, timeoutTask) == timeoutTask)
+                    {
                         try
                         {
-                            var killer = new ProcessStartInfo
+                            Process.Start(new ProcessStartInfo
                             {
                                 FileName = "taskkill",
                                 Arguments = $"/PID {process.Id} /F /T",
                                 CreateNoWindow = true,
-                                UseShellExecute = false,
-                                RedirectStandardOutput = true,
-                                RedirectStandardError = true
-                            };
-
-                            using (var killProc = Process.Start(killer))
-                            {
-                                string killOut = await killProc.StandardOutput.ReadToEndAsync();
-                                string killErr = await killProc.StandardError.ReadToEndAsync();
-
-                                _logger.LogInformation($"taskkill output: {killOut}");
-                                if (!string.IsNullOrWhiteSpace(killErr))
-                                    _logger.LogError($"taskkill error: {killErr}");
-
-                                killProc.WaitForExit();
-                            }
+                                UseShellExecute = false
+                            });
                         }
-                        catch (Exception killEx)
+                        catch (Exception ex)
                         {
-                            _logger.LogError($"taskkill xatosi: {killEx.Message}");
+                            _logger.LogError($"taskkill failed: {ex.Message}");
                         }
 
                         return false;
                     }
+/*
+                    string output = await outputTask;
+                    string error = await errorTask;
 
                     _logger.LogInformation($"Exit Code: {process.ExitCode}");
                     if (!string.IsNullOrWhiteSpace(output)) _logger.LogInformation($"Output: {output}");
                     if (!string.IsNullOrWhiteSpace(error)) _logger.LogError($"Error Output: {error}");
-
+*/
                     return process.ExitCode == 0;
                 }
+
             }
             catch (Exception ex)
             {
@@ -227,7 +218,6 @@ namespace SocketClient.Managers
                 return false;
             }
         }
-
 
         public async Task<AppResult> UninstallApplicationAsync(string appName, string[] arguments, string type)
         {
@@ -243,7 +233,7 @@ namespace SocketClient.Managers
 
                     if (string.IsNullOrEmpty(guid))
                     {
-                        return AppResult.Fail($"Ilovaning GUID topilmadi: {appName}");
+                        return AppResult.Fail($"Application GUID not found: {appName}");
                     }
 
                     fileName = "msiexec";
@@ -256,7 +246,7 @@ namespace SocketClient.Managers
 
                     if (string.IsNullOrEmpty(uninstallString))
                     {
-                        return AppResult.Fail($"Ilovani o‘chirish uchun uninstall string topilmadi: {appName}");
+                        return AppResult.Fail($"Uninstall string to uninstall the application was not found: {appName}");
                     }
 
                     if (uninstallString.StartsWith("\""))
@@ -267,8 +257,6 @@ namespace SocketClient.Managers
                     }
                     else
                     {
-                        // 2. Tirnoqsiz bo‘lsa: C:\Program Files (x86)\Steam\uninstall.exe /arg
-                        // Ya'ni faqat birinchi qismni executable deb qabul qilamiz
                         int spaceIndex = uninstallString.IndexOf(' ');
                         if (spaceIndex > 0)
                         {
@@ -300,7 +288,7 @@ namespace SocketClient.Managers
                 }
                 else
                 {
-                    return AppResult.Fail($"Noto‘g‘ri type: {type}. Faqat 'System' yoki 'User' bo‘lishi kerak.");
+                    return AppResult.Fail($"Invalid type: {type}. Must be 'System' or 'User' only.");
                 }
 
                 _logger.LogInformation($"Executing uninstall command: {fileName} {args}");
@@ -315,14 +303,14 @@ namespace SocketClient.Managers
                     if (string.IsNullOrEmpty(check))
                     {
                         await SendApplicationForSocketAsync();
-                        return AppResult.Success($"Ilova muvaffaqiyatli o‘chirildi: {appName}");
+                        return AppResult.Success($"The application was successfully deleted: {appName}");
                     }
 
-                    return AppResult.Fail($"Ilova hali registry'da mavjud, to‘liq o‘chirilmadi: {appName}");
+                    return AppResult.Fail($"The application is still in the registry, it has not been completely removed: {appName}");
                 }
                 else
                 {
-                    return AppResult.Fail($"Ilovani o‘chirishda xatolik bo‘ldi: {appName} (exit code: {exitCode})");
+                    return AppResult.Fail($"There was an error uninstalling the app: {appName} (exit code: {exitCode})");
                 }
             }
             catch (Exception ex)

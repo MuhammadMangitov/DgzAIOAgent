@@ -143,7 +143,7 @@ namespace SocketClient.Services
                 if (commandData == null || string.IsNullOrEmpty(commandData.name))
                 {
                     _logger.LogError("Empty or invalid command!");
-                    await EmitResponseAsync("unknown", false, "Empty or invalid command", "Empty or invalid command!", "");
+                    await EmitResponseUpdateAsync("unknown", false, "Empty or invalid command", "Empty or invalid command!", "");
                     return;
                 }
                 _logger.LogInformation($"Updating application: {appName}");
@@ -205,9 +205,9 @@ namespace SocketClient.Services
 
         private async Task EmitResponseAsync(string command, bool success, string appName, string message, string taskId)
         {
-            _logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
+            /*_logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
                 $"App Name: {appName}, Message: {message}, TaskId: {taskId}");
-
+*/
             var result = new
             {
                 status = success ? "success" : "error",
@@ -235,8 +235,8 @@ namespace SocketClient.Services
         }
         private async Task EmitResponseUpdateAsync(string command, bool success, string appName, string message, string userId)
         {
-            _logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
-                $"App Name: {appName}, Message: {message}, ComputerId: {userId}");
+            /*_logger.LogInformation($"Emitting response for command: {command}, Success: {success}, " +
+                $"App Name: {appName}, Message: {message}, ComputerId: {userId}");*/
 
             var result = new
             {
